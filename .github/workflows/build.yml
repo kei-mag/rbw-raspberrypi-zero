@@ -70,9 +70,9 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.check.outputs.tag }}
-          name: rbw ${{ steps.check.outputs.tag }} (Pi Zero WH / ARMv7)
+          name: rbw ${{ steps.check.outputs.tag }} (Pi Zero / ARMv7)
           body: |
             Automated build for Raspberry Pi Zero / Zero W / Zero WH (ARMv7).
             Original source: https://github.com/doy/rbw/tree/${{ steps.check.outputs.tag }}
           files: |
-            rbw-src/target/arm-unknown-linux-gnueabihf/release/rbw-${{ steps.check.outputs.tag }}-armv6.tar.gz
+            rbw-src/target/arm-unknown-linux-gnueabihf/release/rbw-${{ steps.check.outputs.tag }}-armv7.tar.gz
