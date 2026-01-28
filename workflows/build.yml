@@ -1,0 +1,78 @@
+name: Build rbw for Pi Zero WH
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # 毎日午前0時 (UTC) に実行
+  workflow_dispatch: # 手動実行ボタンも有効にする
+
+permissions:
+  contents: write # リリースを作成するために必要
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for new version
+        id: check
+        run: |
+          # オリジナル(doy/rbw)の最新リリースタグを取得 (例: 1.12.1)
+          LATEST_TAG=$(curl -s https://api.github.com/repos/doy/rbw/releases/latest | jq -r .tag_name)
+          echo "Latest version: $LATEST_TAG"
+          
+          # 自分のリポジトリに同じタグのリリースがあるか確認
+          # (なければ HTTP 404 が返る)
+          HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" https://api.github.com/repos/${{ github.repository }}/releases/tags/$LATEST_TAG)
+          
+          if [ "$HTTP_CODE" == "200" ]; then
+            echo "Already built this version. Skipping."
+            echo "build=false" >> $GITHUB_OUTPUT
+          else
+            echo "New version found! Building..."
+            echo "build=true" >> $GITHUB_OUTPUT
+            echo "tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install Rust
+        if: steps.check.outputs.build == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: arm-unknown-linux-gnueabihf
+
+      - name: Install Cross
+        if: steps.check.outputs.build == 'true'
+        run: cargo install cross
+
+      - name: Checkout upstream source
+        if: steps.check.outputs.build == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: doy/rbw
+          ref: ${{ steps.check.outputs.tag }}
+          path: rbw-src
+
+      - name: Build with Cross
+        if: steps.check.outputs.build == 'true'
+        working-directory: rbw-src
+        run: |
+          cross build --target arm-unknown-linux-gnueabihf --release
+
+      - name: Package binary
+        if: steps.check.outputs.build == 'true'
+        working-directory: rbw-src/target/arm-unknown-linux-gnueabihf/release
+        run: |
+          tar -czvf rbw-${{ steps.check.outputs.tag }}-armv7.tar.gz rbw rbw-agent
+
+      - name: Create Release
+        if: steps.check.outputs.build == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.check.outputs.tag }}
+          name: rbw ${{ steps.check.outputs.tag }} (Pi Zero WH / ARMv7)
+          body: |
+            Automated build for Raspberry Pi Zero / Zero W / Zero WH (ARMv7).
+            Original source: https://github.com/doy/rbw/tree/${{ steps.check.outputs.tag }}
+          files: |
+            rbw-src/target/arm-unknown-linux-gnueabihf/release/rbw-${{ steps.check.outputs.tag }}-armv6.tar.gz
